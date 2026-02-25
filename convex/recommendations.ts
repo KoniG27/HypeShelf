@@ -2,6 +2,7 @@ import { mutation, query, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireIdentity } from "./auth";
 import { validateRecommendationInput } from "./validation";
+import { enforceRateLimit } from "./rateLimit";
 
 async function writeAuditLog(args: {
   ctx: MutationCtx;
@@ -11,13 +12,17 @@ async function writeAuditLog(args: {
     | "set_staff_pick"
     | "unset_staff_pick";
   actorUserId: string;
+  actorRole: "admin" | "user";
   targetId?: string;
+  targetTitle?: string;
 }) {
   // Record sensitive mutations for lightweight traceability.
   await args.ctx.db.insert("audit_logs", {
     action: args.action,
     actorUserId: args.actorUserId,
+    actorRole: args.actorRole,
     targetId: args.targetId,
+    targetTitle: args.targetTitle,
     createdAt: Date.now(),
   });
 }
@@ -72,6 +77,11 @@ export const create = mutation({
     if (!me) {
       throw new Error("Profile not initialized");
     }
+    await enforceRateLimit({
+      ctx,
+      action: "createRecommendation",
+      actorUserId: identity.clerkUserId,
+    });
 
     const clean = validateRecommendationInput(args);
     const recommendationId = await ctx.db.insert("recommendations", {
@@ -88,7 +98,9 @@ export const create = mutation({
       ctx,
       action: "create_recommendation",
       actorUserId: identity.clerkUserId,
+      actorRole: me.role,
       targetId: recommendationId,
+      targetTitle: clean.title,
     });
     return recommendationId;
   },
@@ -107,6 +119,11 @@ export const deleteRecommendation = mutation({
     if (!me) {
       throw new Error("Profile not initialized");
     }
+    await enforceRateLimit({
+      ctx,
+      action: "deleteRecommendation",
+      actorUserId: identity.clerkUserId,
+    });
 
     const recommendation = await ctx.db.get(args.recommendationId);
     if (!recommendation) {
@@ -125,7 +142,9 @@ export const deleteRecommendation = mutation({
       ctx,
       action: "delete_recommendation",
       actorUserId: identity.clerkUserId,
+      actorRole: me.role,
       targetId: args.recommendationId,
+      targetTitle: recommendation.title,
     });
   },
 });
@@ -144,6 +163,11 @@ export const setStaffPick = mutation({
     if (!me || me.role !== "admin") {
       throw new Error("Admin role required");
     }
+    await enforceRateLimit({
+      ctx,
+      action: "setStaffPick",
+      actorUserId: identity.clerkUserId,
+    });
 
     const target = await ctx.db.get(args.recommendationId);
     if (!target) {
@@ -163,7 +187,9 @@ export const setStaffPick = mutation({
             ctx,
             action: "unset_staff_pick",
             actorUserId: identity.clerkUserId,
+            actorRole: me.role,
             targetId: pick._id,
+            targetTitle: pick.title,
           });
         }
       }
@@ -174,7 +200,9 @@ export const setStaffPick = mutation({
       ctx,
       action: args.value ? "set_staff_pick" : "unset_staff_pick",
       actorUserId: identity.clerkUserId,
+      actorRole: me.role,
       targetId: args.recommendationId,
+      targetTitle: target.title,
     });
   },
 });

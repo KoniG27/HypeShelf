@@ -38,10 +38,19 @@ Purpose: primary domain records displayed publicly and in authenticated app view
 ### `audit_logs`
 - `action` (`create_recommendation | delete_recommendation | set_staff_pick | unset_staff_pick`)
 - `actorUserId`
+- `actorRole`
 - `targetId` (optional)
+- `targetTitle` (optional)
 - `createdAt`
 
 Purpose: lightweight traceability for sensitive state changes.
+
+### `mutation_rate_limits`
+- `key`
+- `windowStart`
+- `count`
+
+Purpose: server-side request throttling for sensitive mutations.
 
 ## 3) Authorization Strategy
 
@@ -61,8 +70,11 @@ Frontend only hides/disables buttons for usability; it is non-authoritative.
 
 - **Server-side validation**:
   - trim + normalize genre.
+  - Unicode normalization and control-character rejection.
   - strict max lengths.
   - URL parsing with `http/https` protocol allowlist.
+  - reject private/local hosts (`localhost`, RFC1918 ranges).
+  - optional domain allowlist via `RECOMMENDATION_DOMAIN_ALLOWLIST`.
 - **RBAC**:
   - role stored in `users` and evaluated in backend per mutation.
 - **Ownership checks**:
@@ -70,6 +82,8 @@ Frontend only hides/disables buttons for usability; it is non-authoritative.
   - recommendation ownership fields are set on create and never mutated.
 - **Auditability**:
   - create/delete/staff-pick changes write `audit_logs`.
+- **Abuse protection**:
+  - server-side rate limiting for create/delete/staff-pick mutations.
 - **Fail-secure behavior**:
   - mutations throw explicit errors when auth/profile/permission checks fail.
 
@@ -87,11 +101,28 @@ Reason: reduce malformed or unsafe data entry.
 4. Kept authz strictly in Convex.
 Reason: prevent bypasses via client-side calls.
 
+5. Added mutation rate limiting.
+Reason: reduce spam and repeated destructive actions under abuse scenarios.
+Within scope: no UX changes, only server guardrails.
+
+6. Added local/private host blocking and optional domain allowlist.
+Reason: reduce unsafe link insertion risks.
+Within scope: recommendation links still supported; validation is stricter.
+
+7. Added security response headers in Next.js config (CSP + hardening headers).
+Reason: baseline browser-side hardening.
+Within scope: no product behavior changes.
+
+8. Extended audit logs with actor role and target title snapshot.
+Reason: improve traceability for support/review workflows.
+Within scope: backend-only metadata, not exposed in UI.
+
 ## 6) Trade-offs
 
 - Role bootstrap uses env (`ADMIN_EMAIL` / `ADMIN_CLERK_USER_ID`) for pragmatic setup in take-home scope.
 - Audit logs are minimal and intentionally not exposed in UI.
-- No rate limiter implemented in-app to keep scope tight and dependencies minimal.
+- Rate limiting uses a simple per-user fixed-window approach (clear and lightweight, but not distributed-grade).
+- CSP keeps `unsafe-inline`/`unsafe-eval` to preserve development compatibility with Next/Clerk tooling.
 
 ## 7) What I'd Add in Real Production
 
@@ -117,6 +148,9 @@ CLERK_SECRET_KEY=sk_...
 # Optional bootstrap admin
 ADMIN_CLERK_USER_ID=user_...
 ADMIN_EMAIL=admin@example.com
+
+# Optional link policy
+RECOMMENDATION_DOMAIN_ALLOWLIST=imdb.com,letterboxd.com
 ```
 
 `convex/auth.config.ts` must use your real Clerk issuer domain.

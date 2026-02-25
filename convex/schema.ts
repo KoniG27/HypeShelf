@@ -29,7 +29,14 @@ export default defineSchema({
       v.literal("unset_staff_pick"),
     ),
     actorUserId: v.string(),
+    actorRole: v.union(v.literal("admin"), v.literal("user")),
     targetId: v.optional(v.string()),
+    targetTitle: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_createdAt", ["createdAt"]),
+  mutation_rate_limits: defineTable({
+    key: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_key", ["key"]),
 });

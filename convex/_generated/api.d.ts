@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as rateLimit from "../rateLimit.js";
 import type * as recommendations from "../recommendations.js";
 import type * as users from "../users.js";
 import type * as validation from "../validation.js";
@@ -21,6 +22,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  rateLimit: typeof rateLimit;
   recommendations: typeof recommendations;
   users: typeof users;
   validation: typeof validation;
